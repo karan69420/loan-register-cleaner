@@ -1,0 +1,67 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Loan Register Cleaner</title>
+<style>
+:root{--ink:#1b2733;--mut:#64748b;--line:#e2e8f0;--brand:#1f4e79;--ok:#15803d;--warn:#b45309;--err:#b91c1c}
+*{box-sizing:border-box}body{margin:0;font:15px/1.45 system-ui,Segoe UI,Arial,sans-serif;color:var(--ink);background:#f4f7fa;padding-bottom:90px}
+header{background:var(--brand);color:#fff;padding:18px 28px}header h1{margin:0;font-size:22px}header p{margin:4px 0 0;opacity:.85}
+main{max-width:1150px;margin:0 auto;padding:20px}.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:16px}
+.steps{display:flex;gap:10px;margin-bottom:16px}.steps div{flex:1;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 14px;color:var(--mut)}.steps b{color:var(--brand)}
+.drop{border:2px dashed #94a3b8;border-radius:12px;padding:30px;text-align:center;background:#f8fafc}.drop.hov{background:#e0ecf8;border-color:var(--brand)}
+button,.btn{font:inherit;cursor:pointer;border:1px solid var(--brand);background:#fff;color:var(--brand);border-radius:8px;padding:7px 13px}
+button.pri,.btn.pri{background:var(--brand);color:#fff;font-size:16px;padding:10px 20px}button:hover{filter:brightness(.95)}button.ghost{border-color:var(--line);color:var(--mut)}
+.tiles{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px}.tile{flex:1;min-width:150px;cursor:pointer;border:2px solid var(--line);background:#fff;border-radius:12px;padding:12px 16px}
+.tile.on{border-color:var(--brand)}.tile b{font-size:26px;display:block}.tile span{color:var(--mut)}
+table{width:100%;border-collapse:collapse;background:#fff}th{text-align:left;font-size:12px;text-transform:uppercase;color:var(--mut);padding:8px;border-bottom:2px solid var(--line)}
+td{padding:8px;border-bottom:1px solid var(--line)}tr.left td.v{opacity:.45;text-decoration:line-through}.pill{border-radius:99px;padding:2px 10px;font-size:12px;font-weight:600}
+.ready{background:#dcfce7;color:var(--ok)}.review{background:#fef3c7;color:var(--warn)}.left_out{background:#e2e8f0;color:var(--mut)}
+td.bad{background:#fee2e2;color:var(--err);font-weight:600}td.fx{background:#eff6ff;border-bottom:2px dotted #3b82f6;cursor:help}
+.panel td{background:#fffbeb;padding:10px 14px}.iss{border-left:4px solid var(--warn);background:#fff;padding:8px 12px;margin:6px 0;border-radius:6px}.iss.error{border-color:var(--err)}
+.iss .act{margin-top:6px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}.iss input,.iss select{font:inherit;padding:6px;border:1px solid #cbd5e1;border-radius:6px}
+.note{color:var(--mut);font-style:italic;margin:4px 0}footer{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);padding:12px 28px;display:flex;justify-content:space-between;align-items:center}
+#err{background:#fee2e2;color:var(--err);padding:10px;border-radius:8px;margin-top:10px;display:none}.hide{display:none}
+</style></head><body>
+<header><h1>Loan Register Cleaner</h1><p>Upload a branch register, check anything highlighted, download a clean file. Nothing is deleted without your say-so.</p></header>
+<main>
+<div class="steps"><div><b>1.</b> Choose the register file</div><div><b>2.</b> Check the highlighted rows</div><div><b>3.</b> Download the clean file</div></div>
+<div class="card" id="up"><div class="drop" id="drop"><p style="font-size:17px;margin:0 0 12px">Drag your Excel register here, or</p>
+<label class="btn pri">Choose Excel file<input type="file" id="file" accept=".xlsx" hidden></label>
+<p style="margin:14px 0 0;color:var(--mut)">Dates in this file are written as:
+<select id="order"><option value="auto">Let the tool work it out</option><option value="DMY">Day / Month / Year (31/12/2025)</option><option value="MDY">Month / Day / Year (12/31/2025)</option></select></p></div>
+<div id="err"></div></div>
+<div id="res" class="hide"><div class="tiles" id="tiles"></div><div class="card" style="padding:0;overflow:auto"><table id="tbl"></table></div>
+<p style="color:var(--mut)">Tip: <span style="border-bottom:2px dotted #3b82f6;background:#eff6ff">blue dotted</span> cells were tidied automatically - hover to see what the register originally said. Every change is listed in the "Change Log" sheet of the download.</p></div>
+</main>
+<footer class="hide" id="foot"><span id="fmsg"></span><span><button class="ghost" onclick="location.reload()">Start over</button> <a class="btn pri" href="/api/export" id="dl">Download clean file</a></span></footer>
+<script>
+const F=['branch','customer_name','loan_amount','loan_date','phone','status'],H=['Branch','Customer','Amount','Loan date','Phone','Status'];
+let D=null,view='review';const $=i=>document.getElementById(i);
+const post=async(p,b)=>{const r=await fetch('/api/'+p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});const j=await r.json();if(!r.ok){alert(j.error);return null}D=j;render();return j};
+async function send(file){const fd=new FormData();fd.append('file',file);fd.append('order',$('order').value);$('err').style.display='none';
+ const r=await fetch('/api/upload',{method:'POST',body:fd}),j=await r.json();if(!r.ok){$('err').textContent=j.error;$('err').style.display='block';return}
+ D=j;view=D.rows.some(r=>r.state=='review')?'review':'all';$('up').classList.add('hide');$('res').classList.remove('hide');$('foot').classList.remove('hide');render()}
+$('file').onchange=e=>e.target.files[0]&&send(e.target.files[0]);
+const dz=$('drop');dz.ondragover=e=>{e.preventDefault();dz.classList.add('hov')};dz.ondragleave=()=>dz.classList.remove('hov');dz.ondrop=e=>{e.preventDefault();send(e.dataTransfer.files[0])};
+const fmt=(f,v)=>v==null?'-':f=='loan_amount'?'₹'+Number(v).toLocaleString('en-IN'):v;
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function render(){const R=D.rows,n=s=>R.filter(r=>r.state==s).length;
+ const T=[['review','Needs your attention',n('review')],['ready','Ready',n('ready')],['left_out','Left out',n('left_out')],['all','All rows',R.length]];
+ $('tiles').innerHTML=T.map(([k,l,c])=>`<div class="tile ${view==k?'on':''}" onclick="view='${k}';render()"><b>${c}</b><span>${l}</span></div>`).join('');
+ $('fmsg').innerHTML=n('review')?`<b>${n('review')} row(s)</b> still need a decision - they'll go to a separate "Needs Review" sheet if you download now.`:'All rows are resolved. You are good to download.';
+ let h='<tr><th>Excel row</th>'+H.map(x=>`<th>${x}</th>`).join('')+'<th>Result</th></tr>';
+ R.filter(r=>view=='all'||r.state==view).forEach(r=>{
+  h+=`<tr class="${r.state=='left_out'?'left':''}"><td>${r.src}</td>`+F.map(f=>{const bad=r.issues.some(i=>i.open&&i.field==f),fx=!bad&&r.clean[f]!=null&&String(r.clean[f])!==r.raw[f].trim();
+   return `<td class="v ${bad?'bad':fx?'fx':''}" ${fx?`title="Register said: ${esc(r.raw[f])}"`:''}>${esc(fmt(f,r.clean[f]))}</td>`}).join('')+
+   `<td><span class="pill ${r.state}">${{ready:'Ready',review:'Check',left_out:'Left out'}[r.state]}</span></td></tr>`;
+  const open=r.issues.map((i,k)=>[i,k]).filter(([i])=>i.open);
+  if(r.state=='review'||(r.state=='left_out'))h+=`<tr class="panel"><td></td><td colspan="7">`+(r.raw.notes?`<div class="note">Note in register: "${esc(r.raw.notes)}"</div>`:'')+
+   open.map(([i,k])=>issueHTML(r,i,k)).join('')+
+   (r.excluded?`<button onclick="post('exclude',{id:${r.id},value:false})">Put this row back</button>`:`<button class="ghost" onclick="post('exclude',{id:${r.id},value:true})">Leave this row out of the clean file</button>`)+`</td></tr>`});
+ $('tbl').innerHTML=h}
+function issueHTML(r,i,k){const id=`in${r.id}_${k}`,f=i.field;let a='';
+ if(i.suggest!=null)a+=`<button class="pri" style="font-size:14px;padding:6px 12px" onclick="post('fix',{id:${r.id},field:'${f}',value:'${esc(i.suggest)}'})">Use ${esc(fmt(f,i.suggest))}</button>`;
+ if(f!='row'){a+=f=='status'?`<select id="${id}"><option>Active</option><option>Closed</option><option>NPA</option></select>`:`<input id="${id}" placeholder="${{loan_date:'e.g. 2025-03-05',phone:'10-digit number',loan_amount:'e.g. 50000'}[f]||'Type the correct value'}" value="${i.level=='warn'?esc(r.clean[f]??''):''}">`;
+  a+=`<button onclick="post('fix',{id:${r.id},field:'${f}',value:$('${id}').value})">Save correction</button>`}
+ if(i.level=='warn')a+=`<button onclick="post('approve',{id:${r.id},issue:${k}})">${i.kind=='dup'?'Not a duplicate - keep both':"It's correct - keep as is"}</button>`;
+ if(i.kind=='dup'&&!r.excluded)a+=`<button onclick="post('exclude',{id:${r.id},value:true})">Duplicate - leave this row out</button>`;
+ return `<div class="iss ${i.level}"><b>${i.level=='error'?'Needs fixing:':'Please check:'}</b> ${esc(i.msg)}${i.field!='row'?` <span style="color:var(--mut)">(register says: "${esc(r.raw[f])}")</span>`:''}<div class="act">${a}</div></div>`}
+</script></body></html>
